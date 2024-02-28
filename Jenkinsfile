@@ -1,31 +1,61 @@
-#!groovy
-
-node {
-
-    try {
-        stage 'Checkout'
-            checkout scm
-
-            sh 'git log HEAD^..HEAD --pretty="%h %an - %s" > GIT_CHANGES'
-            def lastChanges = readFile('GIT_CHANGES')
-            slackSend color: "warning", message: "Started `${env.JOB_NAME}#${env.BUILD_NUMBER}`\n\n_The changes:_\n${lastChanges}"
-
-        stage 'Test'
-            sh 'virtualenv env -p python3.5'
-            sh '. env/bin/activate'
-            sh 'env/bin/pip install -r requirements.txt'
-
-        stage 'Deploy'
-            echo 'deploy here'
-
-        stage 'Publish results'
-            slackSend color: "good", message: "Build successful: `${env.JOB_NAME}#${env.BUILD_NUMBER}` <${env.BUILD_URL}|Open in Jenkins>"
+def img
+pipeline {
+    environment {
+        registry = "khasanjonpython/jenkins-python" //To push an image to Docker Hub, you must first name your local image using your Docker Hub username and the repository name that you created through Docker Hub on the web.
+        registryCredential = 'DOCKERHUB'
+        githubCredential = 'GITHUB'
+        dockerImage = ''
     }
+    agent any
+    stages {
 
-    catch (err) {
-        slackSend color: "danger", message: "Build failed :face_with_head_bandage: \n`${env.JOB_NAME}#${env.BUILD_NUMBER}` <${env.BUILD_URL}|Open in Jenkins>"
+        stage('checkout') {
+                steps {
+                git branch: 'dev',
+                credentialsId: githubCredential,
+                url: 'https://github.com/khasanjon-dev/jenkins.git'
+                }
+        }
 
-        throw err
+        stage ('Test'){
+                steps {
+                sh "pytest test_calculate.py"
+                }
+        }
+
+        stage ('Clean Up'){
+            steps{
+                sh returnStatus: true, script: 'docker stop $(docker ps -a | grep ${JOB_NAME} | awk \'{print $1}\')'
+                sh returnStatus: true, script: 'docker rmi $(docker images | grep ${registry} | awk \'{print $3}\') --force' //this will delete all images
+                sh returnStatus: true, script: 'docker rm ${JOB_NAME}'
+            }
+        }
+
+        stage('Build Image') {
+            steps {
+                script {
+                    img = registry + ":${env.BUILD_ID}"
+                    println ("${img}")
+                    dockerImage = docker.build("${img}")
+                }
+            }
+        }
+
+        stage('Push To DockerHub') {
+            steps {
+                script {
+                    docker.withRegistry( 'https://registry.hub.docker.com ', registryCredential ) {
+                        dockerImage.push()
+                    }
+                }
+            }
+        }
+
+        stage('Deploy') {
+           steps {
+                sh label: '', script: "docker run -d --name ${JOB_NAME} -p 5000:5000 ${img}"
+          }
+        }
+
+      }
     }
-
-}
