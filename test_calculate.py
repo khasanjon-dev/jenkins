@@ -15,3 +15,13 @@ def test_multiply():
 
 def test_divide():
     assert divide(10, 5) == 2
+
+
+'''
+//         stage ('create environment and activate') {
+//                 steps {
+//                 sh 'python3 -m venv venv'
+//                 sh 'source venv/bin/activate'
+//                 }
+//         }
+'''
