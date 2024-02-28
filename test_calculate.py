@@ -18,10 +18,5 @@ def test_divide():
 
 
 '''
-//         stage ('create environment and activate') {
-//                 steps {
-//                 sh 'python3 -m venv venv'
-//                 sh 'source venv/bin/activate'
-//                 }
-//         }
+
 '''
